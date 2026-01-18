@@ -1,0 +1,154 @@
+########################################
+#   IDEs & Editors
+########################################
+
+# Visual Studio / Rider / VSCode
+.vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.pidb
+*.userprefs
+*.unityproj
+*.booproj
+*.DotSettings.user
+*.sln.iml
+
+########################################
+#   Build Systems & CMake
+########################################
+
+# Visual Studio build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+ipch/
+*.VC.db
+*.VC.opendb
+
+# CMake intermediate files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+########################################
+#   GLAD (OpenGL Loader)
+########################################
+
+glad/build/
+glad/CMakeFiles/
+glad/CMakeCache.txt
+glad/*.vcxproj*
+glad/*.sln
+
+########################################
+#   Compiled / Binary Files
+########################################
+
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.pdb
+*.idb
+*.ilk
+*.exe
+*.app
+*.out
+
+########################################
+#   Logs / Misc / Cache
+########################################
+
+*.tlog
+*.log
+*.lastbuildstate
+*.db
+*.opendb
+*.swp
+*.tmp
+*.bak
+*.old
+*.orig
+
+########################################
+#   OS Files
+########################################
+
+.DS_Store
+Thumbs.db
+Desktop.ini
+desktop.ini
+
+########################################
+#   KiCad
+########################################
+
+*.lck
+*.bak
+*.kicad_prl
+**/fp-info-cache
+prelimHolocube-backups/
+**/#auto_saved_files#
+
+########################################
+#   Unity Generated Files
+########################################
+
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Bb]uild/
+**/[Bb]uilds/
+**/[Ll]ogs/
+**/[Uu]serSettings/
+**/[Mm]emoryCaptures/
+**/[Pp]ackages/com.unity.collab-proxy/
+**/[Cc]acheServer/
+
+# Unity cache & Addressables
+**/[Aa]ssets/AddressableAssetsData/*
+!**/[Aa]ssets/AddressableAssetsData/*.meta
+**/[Aa]ssets/StreamingAssets/aa/*
+!**/[Aa]ssets/StreamingAssets/aa/*.meta
+
+# JetBrains Rider plugin
+**/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# Keep essential Unity project data
+!**/[Aa]ssets/**/*.meta
+!**/[Pp]rojectSettings/
+!**/[Pp]ackages/
+
+########################################
+#   Build Artifacts
+########################################
+
+*.apk
+*.aab
+*.unitypackage
+*.app
+*.exe
+*.dll
+*.pdb
+*.mdb
+*.so
+*.dSYM/
+*.ipa
+
+########################################
+#   Crash Reports & Misc
+########################################
+
+sysinfo.txt
+.collabignore
