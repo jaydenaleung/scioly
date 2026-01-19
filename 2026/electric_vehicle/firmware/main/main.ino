@@ -20,7 +20,7 @@ const double TARGET_TIME = 15.0; // in s
 const double TARGET_TIME_MS = TARGET_TIME*1000.0; // in ms
 
 // Speed logic
-const int maxServoSpeed = 135; // fastest the servo can run without the limit switch skipping revs
+const int maxServoSpeed = 0; // fastest the servo can run without the limit switch skipping revs
 const double maxEndRealSpeed = 43.62688; // see spreadsheet & journal to see how I got this
 const int maxEndServoSpeed = 72;
 
