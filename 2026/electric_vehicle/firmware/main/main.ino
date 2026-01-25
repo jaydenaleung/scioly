@@ -12,7 +12,7 @@ const double diameter = 9.0; // average diameter of BACK wheels in cm
 const double circumference = PI*diameter;
 
 ////// COMP PARAMS //////
-const double TARGET_DIST = 800.0; // in cm
+const double TARGET_DIST = 1000.0; // in cm
 const double TARGET_REVS = TARGET_DIST / circumference;
 const int TARGET_REVS_FLOOR = (int)TARGET_REVS;
 
@@ -32,9 +32,11 @@ const double bufferDist = endRevs * circumference; // distance from the beginnin
 const double finalDist = (TARGET_REVS - TARGET_REVS_FLOOR) * circumference; // distance from last rev to end
 const double endDist = bufferDist + finalDist; // how much dist is left before the end - endRevs revs + the rest
 
-const double endTime; // how much time is left before the end
-const double endRealSpeed; // calculated later with endDist/Time
-const double endServoSpeed; // this is what you put in
+double endTime; // how much time is left before the end
+double endRealSpeed; // calculated later with endDist/Time
+double endServoSpeed; // this is what you put in
+
+int currentSpeed = -1; // current speed
 
 // Button properties
 int revs = 0; // how many revs you've GONE
@@ -44,13 +46,16 @@ int lastSwitchState = HIGH;
 
 // Flags
 bool start = false;
+bool triggerSlow = false;
 bool slow = false;
+bool triggerFinal = false;
 bool calculateFinalEndDist = false;
 bool end = false;
 
 // Timing
 double t; // in ms
 double finalEndT; // millis() time at the start of the final period
+double endElapsedTime;
 double currentTime;
 bool startTiming = false;
 void updateTime() { currentTime = millis() - t; }
@@ -80,6 +85,7 @@ void loop() {
         if (startTiming) {
             t = millis();
 
+            currentSpeed = -maxServoSpeed;
             s.write(-maxServoSpeed); // negative for the right direction
 
             startTiming = false;
@@ -90,20 +96,22 @@ void loop() {
         }
 
         if (!end && currentTime >= TARGET_TIME_MS) { // If TARGET_TIME_MS exceeded
-            Serial.println("TIME EXCEEDED BY: " + (millis()-t-TARGET_TIME_MS)/1000.0 + " s");
+            Serial.println("TIME EXCEEDED BY: " + String((millis()-t-TARGET_TIME_MS)/1000.0) + " s");
         }
 
         // Limit switch
-        int currentSwitchState = digitalRead(buttonPin);
+        int currentSwitchState = digitalRead(switchPin);
         if (!calculateFinalEndDist && currentSwitchState == LOW && lastSwitchState == HIGH) { // remember to make it that you can't hold it down
             revs++;
             dist = revs*circumference; // recalculate
+            Serial.println("revs = " + String(revs));
         }
         lastSwitchState = currentSwitchState;
 
-        if (revs == TARGET_REVS_FLOOR - endRevs) { // beginning of slow period / slow period trigger
+        if (revs == TARGET_REVS_FLOOR - endRevs && !triggerSlow) { // beginning of slow period / slow period trigger
             // Trigger flag to compute end parameters and slow down
             slow = true;
+            triggerSlow = true;
         }
 
         if (slow) { // slow period logic
@@ -112,6 +120,7 @@ void loop() {
 
             if (currentTime < TARGET_TIME_MS && abs(endTime) > endDist/maxEndRealSpeed) { // if the car has not passed the target time AND has adequate time to cross (meaning there is more time than the time it would take to run at maxEndSpeed)
                 endRealSpeed = endDist/endTime;
+                Serial.println(endRealSpeed);
                 endServoSpeed = -0.389298 * endRealSpeed + 88.70013; // regression model from spreadsheet
             } else {
                 // move at max possible reliable speed to get to finish line at endDist --> see journal and spreadsheet to see how I got this number
@@ -119,20 +128,22 @@ void loop() {
                 endRealSpeed = maxEndRealSpeed;
             }
 
+            currentSpeed = endServoSpeed;
             s.write(endServoSpeed);
+            Serial.println("current speed = " + String(currentSpeed));
 
             slow = false;
         }
 
-        if (revs == TARGET_REVS_FLOOR) { // beginning of final period, i.e. period beginning after switch is hit for the last time / final period trigger
+        if (revs == TARGET_REVS_FLOOR && !triggerFinal) { // beginning of final period, i.e. period beginning after switch is hit for the last time / final period trigger
             calculateFinalEndDist = true;
             finalEndT = millis();
+            triggerFinal = true;
         }
 
         if (calculateFinalEndDist) { // final period logic
             endElapsedTime = millis() - finalEndT;
             currentFinalEndDist = endRealSpeed * endElapsedTime;
-            
         }
 
         if (currentFinalEndDist >= finalDist) { // beginning of end period / end period trigger
@@ -143,14 +154,17 @@ void loop() {
         }
 
         if (end) { // end period logic - you're done!
+            currentSpeed = 90;
             s.write(90);
 
             // End stats
-            Serial.println("Total distance covered: " + dist);
-            Serial.println("Total time elapsed: " + currentTime);
-            Serial.println();
+            Serial.println("Total distance covered: " + String(dist));
+            Serial.println("Total time elapsed: " + String(currentTime));
 
             start = false;
         }
     }
+
+    // Serial.println("current speed = " + String(currentSpeed));
+    // Serial.println("revs = " + String(revs));
 }
