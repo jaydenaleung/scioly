@@ -16,7 +16,7 @@ const double TARGET_DIST = 1000.0; // in cm
 const double TARGET_REVS = TARGET_DIST / circumference;
 const int TARGET_REVS_FLOOR = (int)TARGET_REVS;
 
-const double TARGET_TIME = 15.0; // in s
+const double TARGET_TIME = 20.0; // in s
 const double TARGET_TIME_MS = TARGET_TIME*1000.0; // in ms
 
 // Speed logic
@@ -38,11 +38,17 @@ double endServoSpeed; // this is what you put in
 
 int currentSpeed = -1; // current speed
 
-// Button properties
+// Button properties & debounce
 int revs = 0; // how many revs you've GONE
 
 int lastButtonState = HIGH;
 int lastSwitchState = HIGH;
+
+int currentButtonState;
+int currentSwitchState = HIGH; // default not pressed
+
+unsigned long lastDebounceTime = 0;
+const int debounceDelay = 5; // for limitswitch
 
 // Flags
 bool start = false;
@@ -73,7 +79,7 @@ void setup() {
 
 void loop() {
     // Start button
-    int currentButtonState = digitalRead(buttonPin);
+    currentButtonState = digitalRead(buttonPin);
     if (!start && currentButtonState == LOW && lastButtonState == HIGH) { // LOW = pressed, HIGH = not pressed
         start = true;
         startTiming = true;
@@ -82,6 +88,7 @@ void loop() {
     
     // Main logic
     if (start) {
+        // Initial commands after starting
         if (startTiming) {
             t = millis();
 
@@ -91,30 +98,40 @@ void loop() {
             startTiming = false;
         }
 
+        // Time update
         if (!end) {
             updateTime();
         }
 
+        // Serial print time exceeded
         if (!end && currentTime >= TARGET_TIME_MS) { // If TARGET_TIME_MS exceeded
             Serial.println("TIME EXCEEDED BY: " + String((millis()-t-TARGET_TIME_MS)/1000.0) + " s");
         }
 
         // Limit switch
-        int currentSwitchState = digitalRead(switchPin);
-        if (!calculateFinalEndDist && currentSwitchState == LOW && lastSwitchState == HIGH) { // remember to make it that you can't hold it down
-            revs++;
-            dist = revs*circumference; // recalculate
-            Serial.println("revs = " + String(revs));
+        int switchReading = digitalRead(switchPin); // temporary reading that will be assigned to currentSwitchState if confirmed
+        if (switchReading != lastSwitchState) { lastDebounceTime = millis(); } // start debounce timer
+        if ((millis() - lastDebounceTime) > debounceDelay) { // signal cleared debounce delay
+            if (switchReading != currentSwitchState) { // confirm debounce
+                currentSwitchState = switchReading;
+                if (!calculateFinalEndDist && currentSwitchState == LOW) { // confirm LOW
+                    revs++;
+                    dist = revs*circumference; // recalculate
+                    Serial.println("revs = " + String(revs));
+                }
+            }
         }
-        lastSwitchState = currentSwitchState;
+        lastSwitchState = switchReading;
 
-        if (revs == TARGET_REVS_FLOOR - endRevs && !triggerSlow) { // beginning of slow period / slow period trigger
+        // Beginning of slow period / slow period trigger
+        if (revs == TARGET_REVS_FLOOR - endRevs && !triggerSlow) {
             // Trigger flag to compute end parameters and slow down
             slow = true;
             triggerSlow = true;
         }
 
-        if (slow) { // slow period logic
+        // Slow period logic
+        if (slow) {
             // Compute endTime, endSpeed
             endTime = (TARGET_TIME_MS - currentTime)/1000.0; // in s
 
@@ -135,25 +152,29 @@ void loop() {
             slow = false;
         }
 
-        if (revs == TARGET_REVS_FLOOR && !triggerFinal) { // beginning of final period, i.e. period beginning after switch is hit for the last time / final period trigger
+        // Beginning of final period, i.e. period beginning after switch is hit for the last time / final period trigger
+        if (revs == TARGET_REVS_FLOOR && !triggerFinal) {
             calculateFinalEndDist = true;
             finalEndT = millis();
             triggerFinal = true;
         }
 
-        if (calculateFinalEndDist) { // final period logic
+        // Final period logic
+        if (calculateFinalEndDist) {
             endElapsedTime = millis() - finalEndT;
-            currentFinalEndDist = endRealSpeed * endElapsedTime;
+            currentFinalEndDist = endRealSpeed * (endElapsedTime / 1000.0); // also convert endElapsedTime to secs
         }
 
-        if (currentFinalEndDist >= finalDist) { // beginning of end period / end period trigger
+        // Beginning of end period / end period trigger
+        if (currentFinalEndDist >= finalDist) {
             dist += currentFinalEndDist;
             
             calculateFinalEndDist = false;
             end = true;
         }
 
-        if (end) { // end period logic - you're done!
+        // End period logic - you're done!
+        if (end) {
             currentSpeed = 90;
             s.write(90);
 
