@@ -12,11 +12,11 @@ const double diameter = 9.0; // average diameter of BACK wheels in cm
 const double circumference = PI*diameter;
 
 ////// COMP PARAMS //////
-const double TARGET_DIST = 1000.0; // in cm
+const double TARGET_DIST = 810.0; // in cm
 const double TARGET_REVS = TARGET_DIST / circumference;
 const int TARGET_REVS_FLOOR = (int)TARGET_REVS;
 
-const double TARGET_TIME = 20.0; // in s
+const double TARGET_TIME = 15.0; // in s
 const double TARGET_TIME_MS = TARGET_TIME*1000.0; // in ms
 
 // Speed logic
@@ -27,7 +27,7 @@ const int maxEndServoSpeed = 72;
 double dist = 0.0; // current distance from start line
 double currentFinalEndDist = 0.0; // recording distance from the last press of the switch
 
-const int endRevs = 1; // # of revs before end line to stop rolling, excluding any partial revs because TARGET_DIST does not divide with revs as a whole
+const int endRevs = 3; // # of revs before end line to stop rolling, excluding any partial revs because TARGET_DIST does not divide with revs as a whole
 const double bufferDist = endRevs * circumference; // distance from the beginning of the "buffer" revs to the last "buffer" rev - e.g. if endRevs = 1, then bufferDist = circumference, if eR = 2, bD = 2*circ, etc.
 const double finalDist = (TARGET_REVS - TARGET_REVS_FLOOR) * circumference; // distance from last rev to end
 const double endDist = bufferDist + finalDist; // how much dist is left before the end - endRevs revs + the rest
