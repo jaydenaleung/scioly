@@ -81,7 +81,7 @@
 #include <Servo.h>
 #include <Wire.h>
 #include <Encoder.h>             // Paul Stoffregen's Encoder library (quadrature decoding)
-#include <PID_v1.h>              // Brett Beauregard's PID library (v1.2.1)
+#include <PID_v2.h>              // Brett Beauregard's PID library (v1.2.1)
 #include <goBILDA_Pinpoint.h>    // goBILDA official Pinpoint Odometry Computer library
 
 /* ─────────────────────────────────────────────────────────────────────────────
