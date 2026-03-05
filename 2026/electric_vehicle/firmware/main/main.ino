@@ -485,6 +485,10 @@ void setup() {
     pinpoint.setEncoderResolution(goBILDA::EncoderResolution::goBILDA_4_BAR_POD);
     pinpoint.setEncoderDirections(goBILDA::EncoderDirection::Forward,
                                   goBILDA::EncoderDirection::Forward);
+    // Pod offsets relative to the wheel-axle midpoint (body frame origin, mm):
+    //   x = side-to-side distance of the forward (Y-measuring) pod  = MEAS_POINT_X
+    //   y = forward distance of the side-to-side (X-measuring) pod  = MEAS_POINT_Y
+    pinpoint.setOffsets(MEAS_POINT_X, MEAS_POINT_Y);
     pinpoint.resetPositionAndIMU();
 
     // Encoder library handles pin modes and interrupts internally — no manual
