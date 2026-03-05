@@ -12,13 +12,15 @@
  *      TARGET_TIME_S   – total time allowed to traverse the track (s)
  *
  *  A cascaded PID architecture is used:
- *      1. Positional PID (outer loop) — uses goBILDA 4-bar odometry pods
- *         to obtain the robot's (x, y, heading) pose and produces a desired
- *         forward velocity and a heading-correction term.
+ *      1. Positional PID (outer loop) — uses goBILDA Pinpoint Odometry Computer
+ *         (via the goBILDA_Pinpoint library) to obtain the robot's (x, y, heading)
+ *         pose and produces a desired forward velocity and a heading-correction term.
  *      2. Velocity PIDs (inner loops, one per wheel) — each reads a
- *         600 PP/R quadrature encoder, computes the current wheel speed, and
- *         drives a goBILDA continuous-rotation servo to match the velocity
- *         set-point produced by the outer loop.
+ *         600 PP/R quadrature encoder (via Paul Stoffregen's Encoder library),
+ *         computes the current wheel speed, and drives a goBILDA continuous-
+ *         rotation servo to match the velocity set-point produced by the outer loop.
+ *
+ *  All three PID controllers use Brett Beauregard's PID_v1 library.
  *
  *  MEASUREMENT-POINT OFFSET
  *  ------------------------
@@ -64,25 +66,30 @@
  *      Pin  7  – Start button (INPUT_PULLUP, active LOW)
  *      Pin  9  – Left  servo PWM
  *      Pin 10  – Right servo PWM
- *      I2C (A4/A5) – goBILDA Odometry Computer
+ *      I2C (A4/A5) – goBILDA Pinpoint Odometry Computer
+ *
+ *  LIBRARIES
+ *  ---------
+ *      • Servo.h              – built-in Arduino servo control
+ *      • Encoder.h            – Paul Stoffregen's quadrature encoder library
+ *      • PID_v1.h             – Brett Beauregard's PID library (v1.2.1)
+ *      • goBILDA_Pinpoint.h   – goBILDA official Pinpoint Odometry Computer library
  *
  * =============================================================================
  */
 
 #include <Servo.h>
 #include <Wire.h>
+#include <Encoder.h>             // Paul Stoffregen's Encoder library (quadrature decoding)
+#include <PID_v1.h>              // Brett Beauregard's PID library (v1.2.1)
+#include <goBILDA_Pinpoint.h>    // goBILDA official Pinpoint Odometry Computer library
 
 /* ─────────────────────────────────────────────────────────────────────────────
- *  goBILDA Odometry Computer I2C Interface
- *  The goBILDA odometry computer communicates over I2C and provides
- *  x (mm), y (mm), and heading (radians) of the robot.
+ *  goBILDA Pinpoint Odometry Computer
+ *  Provides fused (x, y, heading) pose via I2C using two dead-wheel pods
+ *  and an internal IMU.  The library handles all I2C communication internally.
  * ───────────────────────────────────────────────────────────────────────────── */
-#define ODOM_I2C_ADDR  0x30        // Default I2C address for goBILDA odom computer
-
-// Register map (from goBILDA documentation)
-#define REG_X_POS      0x04        // X position, 2 bytes, signed, mm
-#define REG_Y_POS      0x06        // Y position, 2 bytes, signed, mm
-#define REG_HEADING    0x08        // Heading,    2 bytes, signed, 0.01 rad units
+goBILDA::Pinpoint pinpoint;
 
 /* ─────────────────────────────────────────────────────────────────────────────
  *  USER-ADJUSTABLE / DAY-OF COMPETITION PARAMETERS
@@ -149,49 +156,34 @@ Servo servoR;
 const int SERVO_STOP = 1500;
 
 /* ─────────────────────────────────────────────────────────────────────────────
- *  ENCODER STATE  (volatile — updated in ISRs)
+ *  ENCODER OBJECTS  (Paul Stoffregen's Encoder library)
+ *
+ *  The library handles quadrature decoding and interrupt attachment internally.
+ *  Best performance when channel-A pins support hardware interrupts
+ *  (pins 2 & 3 on Arduino Uno); channel-B pins use change detection.
  * ───────────────────────────────────────────────────────────────────────────── */
-volatile long encCountL = 0;
-volatile long encCountR = 0;
-
-// ISR for left encoder channel A — reads channel B for direction
-void isrLeftEncoder() {
-    if (digitalRead(PIN_ENC_L_B) == HIGH) encCountL++;
-    else                                   encCountL--;
-}
-
-// ISR for right encoder channel A — reads channel B for direction
-void isrRightEncoder() {
-    if (digitalRead(PIN_ENC_R_B) == HIGH) encCountR++;
-    else                                   encCountR--;
-}
+Encoder encL(PIN_ENC_L_A, PIN_ENC_L_B);   // Left  wheel encoder
+Encoder encR(PIN_ENC_R_A, PIN_ENC_R_B);   // Right wheel encoder
 
 /* ─────────────────────────────────────────────────────────────────────────────
- *  goBILDA ODOMETRY HELPERS
+ *  ODOMETRY  (goBILDA Pinpoint library)
+ *
+ *  The Pinpoint Odometry Computer fuses two dead-wheel encoder pods with an
+ *  internal IMU and reports (x, y, heading) over I2C.  The goBILDA_Pinpoint
+ *  library handles all register reads and data conversion internally.
  * ───────────────────────────────────────────────────────────────────────────── */
-
-// Read a signed 16-bit register pair from the odometry computer over I2C
-int16_t odomRead16(uint8_t reg) {
-    Wire.beginTransmission(ODOM_I2C_ADDR);
-    Wire.write(reg);
-    Wire.endTransmission(false);
-    Wire.requestFrom((uint8_t)ODOM_I2C_ADDR, (uint8_t)2);
-    if (Wire.available() < 2) return 0;
-    uint8_t lo = Wire.read();
-    uint8_t hi = Wire.read();
-    return (int16_t)((hi << 8) | lo);
-}
 
 // Robot pose from odometry computer (all in mm / radians)
 double odomX       = 0.0;   // mm, field frame
 double odomY       = 0.0;   // mm, field frame
 double odomHeading = 0.0;   // radians
 
-// Read latest pose from the goBILDA odometry computer
+// Read latest pose from the goBILDA Pinpoint Odometry Computer
 void updateOdometry() {
-    odomX       = (double)odomRead16(REG_X_POS);           // mm
-    odomY       = (double)odomRead16(REG_Y_POS);           // mm
-    odomHeading = (double)odomRead16(REG_HEADING) * 0.01;  // centirads to rads
+    goBILDA::Pose2D pos = pinpoint.getPosition();
+    odomX       = (double)pos.x;          // mm
+    odomY       = (double)pos.y;          // mm
+    odomHeading = (double)pos.heading;    // radians
 }
 
 /*
@@ -324,73 +316,17 @@ void computeTrack() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
- *  PID CONTROLLER — generic struct, used for heading and velocity loops
- * ───────────────────────────────────────────────────────────────────────────── */
-struct PIDController {
-    double kp, ki, kd;
-    double integral;
-    double prevError;
-    double outputMin, outputMax;
-    unsigned long lastTime;
-
-    // Initialise the PID with gains and output limits
-    void init(double _kp, double _ki, double _kd, double _min, double _max) {
-        kp = _kp;  ki = _ki;  kd = _kd;
-        integral = 0.0;
-        prevError = 0.0;
-        outputMin = _min;
-        outputMax = _max;
-        lastTime = micros();
-    }
-
-    // Compute PID output given a setpoint and current measurement
-    double compute(double setpoint, double measurement) {
-        unsigned long now = micros();
-        double dt = (double)(now - lastTime) / 1e6;   // seconds
-        if (dt <= 0.0) dt = 0.001;                     // safety guard
-        lastTime = now;
-
-        double error = setpoint - measurement;
-
-        // Proportional term
-        double P = kp * error;
-
-        // Integral term with anti-windup clamping
-        integral += error * dt;
-        double I = ki * integral;
-
-        // Derivative term (on error)
-        double derivative = (error - prevError) / dt;
-        double D = kd * derivative;
-        prevError = error;
-
-        // Sum and clamp output
-        double output = P + I + D;
-        if (output > outputMax) { output = outputMax; integral -= error * dt; }
-        if (output < outputMin) { output = outputMin; integral -= error * dt; }
-
-        return output;
-    }
-
-    // Reset internal state (call when switching modes)
-    void reset() {
-        integral = 0.0;
-        prevError = 0.0;
-        lastTime = micros();
-    }
-};
-
-/* ─────────────────────────────────────────────────────────────────────────────
- *  PID INSTANCES
+ *  PID CONTROLLERS  (Brett Beauregard's PID_v1 library)
  *
- *  Outer loop:  headingPID — error = desired heading - current heading
+ *  The PID_v1 library links each controller to three double variables
+ *  (Input, Output, Setpoint) via pointers.  Call Compute() every loop
+ *  iteration; the library internally enforces the sample time.
+ *
+ *  Outer loop:  headingPID — error = desired heading − current heading
  *  Inner loops: velPID_L, velPID_R — one per wheel
  *
  *  Tuning parameters are starting points; adjust on the real robot.
  * ───────────────────────────────────────────────────────────────────────────── */
-PIDController headingPID;
-PIDController velPID_L;
-PIDController velPID_R;
 
 // Heading PID tuning: input = rad, output = mm/s differential correction
 const double HDG_KP = 150.0;
@@ -401,6 +337,27 @@ const double HDG_KD =  10.0;
 const double VEL_KP = 0.8;
 const double VEL_KI = 2.0;
 const double VEL_KD = 0.01;
+
+// PID I/O variables — the PID_v1 library reads/writes these via pointers
+double hdgInput = 0.0, hdgOutput = 0.0, hdgSetpoint = 0.0;
+double velInputL = 0.0, velOutputL = 0.0, velSetpointL = 0.0;
+double velInputR = 0.0, velOutputR = 0.0, velSetpointR = 0.0;
+
+// Construct PID objects (DIRECT = positive output for positive error)
+PID headingPID(&hdgInput, &hdgOutput, &hdgSetpoint, HDG_KP, HDG_KI, HDG_KD, DIRECT);
+PID velPID_L(&velInputL, &velOutputL, &velSetpointL, VEL_KP, VEL_KI, VEL_KD, DIRECT);
+PID velPID_R(&velInputR, &velOutputR, &velSetpointR, VEL_KP, VEL_KI, VEL_KD, DIRECT);
+
+/*
+ * resetPID() — helper to reset a PID controller's internal state.
+ * Toggles mode MANUAL→AUTOMATIC which clears the integral accumulator
+ * and resets the derivative history inside the PID_v1 library.
+ */
+void resetPID(PID &pid, double &output) {
+    pid.SetMode(MANUAL);
+    output = 0.0;
+    pid.SetMode(AUTOMATIC);
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
  *  SPEED TARGETS  (mm/s at the wheel)
@@ -417,18 +374,16 @@ unsigned long velLastTime = 0;
 double wheelVelL = 0.0;   // mm/s, left wheel
 double wheelVelR = 0.0;   // mm/s, right wheel
 
-// Compute wheel velocities from encoder counts
+// Compute wheel velocities from encoder counts (using Encoder library)
 void updateWheelVelocities() {
     unsigned long now = micros();
     double dt = (double)(now - velLastTime) / 1e6;
     if (dt < 0.005) return;  // don't update faster than every 5 ms
     velLastTime = now;
 
-    // Read encoder counts atomically
-    noInterrupts();
-    long cL = encCountL;
-    long cR = encCountR;
-    interrupts();
+    // Read encoder counts via the Encoder library (thread-safe internally)
+    long cL = encL.read();
+    long cR = encR.read();
 
     long deltaL = cL - prevEncL;
     long deltaR = cR - prevEncR;
@@ -525,18 +480,15 @@ void setup() {
     Serial.begin(9600);
     Serial.println(F("=== Electric Vehicle - Cascaded PID ==="));
 
-    // I2C for goBILDA odometry computer
-    Wire.begin();
+    // Initialise goBILDA Pinpoint Odometry Computer (I2C is started internally)
+    pinpoint.begin();
+    pinpoint.setEncoderResolution(goBILDA::EncoderResolution::goBILDA_4_BAR_POD);
+    pinpoint.setEncoderDirections(goBILDA::EncoderDirection::Forward,
+                                  goBILDA::EncoderDirection::Forward);
+    pinpoint.resetPositionAndIMU();
 
-    // Encoder pins
-    pinMode(PIN_ENC_L_A, INPUT_PULLUP);
-    pinMode(PIN_ENC_L_B, INPUT_PULLUP);
-    pinMode(PIN_ENC_R_A, INPUT_PULLUP);
-    pinMode(PIN_ENC_R_B, INPUT_PULLUP);
-
-    // Attach interrupts for encoders (RISING edge on channel A)
-    attachInterrupt(digitalPinToInterrupt(PIN_ENC_L_A), isrLeftEncoder,  RISING);
-    attachInterrupt(digitalPinToInterrupt(PIN_ENC_R_A), isrRightEncoder, RISING);
+    // Encoder library handles pin modes and interrupts internally — no manual
+    // pinMode() or attachInterrupt() calls are needed for encoder pins.
 
     // Start button
     pinMode(PIN_BUTTON, INPUT_PULLUP);
@@ -546,10 +498,18 @@ void setup() {
     servoR.attach(PIN_SERVO_R);
     stopMotors();
 
-    // Initialise PID controllers
-    headingPID.init(HDG_KP, HDG_KI, HDG_KD, -200.0, 200.0);
-    velPID_L.init(VEL_KP, VEL_KI, VEL_KD, -500.0, 500.0);
-    velPID_R.init(VEL_KP, VEL_KI, VEL_KD, -500.0, 500.0);
+    // Configure PID controllers (PID_v1 library)
+    headingPID.SetMode(AUTOMATIC);
+    headingPID.SetOutputLimits(-200.0, 200.0);
+    headingPID.SetSampleTime(10);   // 10 ms sample period
+
+    velPID_L.SetMode(AUTOMATIC);
+    velPID_L.SetOutputLimits(-500.0, 500.0);
+    velPID_L.SetSampleTime(10);
+
+    velPID_R.SetMode(AUTOMATIC);
+    velPID_R.SetOutputLimits(-500.0, 500.0);
+    velPID_R.SetSampleTime(10);
 
     // Compute track geometry from competition parameters
     computeTrack();
@@ -581,9 +541,9 @@ void loop() {
                 navState = NAV_STRAIGHT;
                 currentWP = 1;
                 desiredHeading = headingTo(measX, measY, wpX[1], wpY[1]);
-                headingPID.reset();
-                velPID_L.reset();
-                velPID_R.reset();
+                resetPID(headingPID, hdgOutput);
+                resetPID(velPID_L, velOutputL);
+                resetPID(velPID_R, velOutputR);
                 Serial.println(F(">>> STARTED <<<"));
             }
         }
@@ -614,7 +574,7 @@ void loop() {
             navState = NAV_TURNING;
             desiredHeading = headingTo(wpX[currentWP], wpY[currentWP],
                                        wpX[currentWP + 1], wpY[currentWP + 1]);
-            headingPID.reset();
+            resetPID(headingPID, hdgOutput);
             break;
         }
 
@@ -623,8 +583,11 @@ void loop() {
         double targetHeading = headingTo(measX, measY, wpX[currentWP], wpY[currentWP]);
         double headingError  = wrapAngle(targetHeading - odomHeading);
 
-        // Heading PID outputs a differential velocity correction (mm/s)
-        double headingCorrection = headingPID.compute(0.0, -headingError);
+        // Heading PID: setpoint = 0, input = negative heading error
+        hdgSetpoint = 0.0;
+        hdgInput    = -headingError;
+        headingPID.Compute();
+        double headingCorrection = hdgOutput;
 
         // Base forward speed for straight segments
         double baseSpeed = CRUISE_SPEED_MM_S;
@@ -634,10 +597,15 @@ void loop() {
         double targetVelR = baseSpeed + headingCorrection;
 
         // ── Inner loops: velocity PIDs (one per wheel) ──
-        double cmdL = velPID_L.compute(targetVelL, wheelVelL);
-        double cmdR = velPID_R.compute(targetVelR, wheelVelR);
+        velSetpointL = targetVelL;
+        velInputL    = wheelVelL;
+        velPID_L.Compute();
 
-        setServoOutput(cmdL, cmdR);
+        velSetpointR = targetVelR;
+        velInputR    = wheelVelR;
+        velPID_R.Compute();
+
+        setServoOutput(velOutputL, velOutputR);
         break;
     }
 
@@ -649,15 +617,18 @@ void loop() {
             // Turn complete — advance to next waypoint
             currentWP++;
             navState = NAV_STRAIGHT;
-            headingPID.reset();
-            velPID_L.reset();
-            velPID_R.reset();
+            resetPID(headingPID, hdgOutput);
+            resetPID(velPID_L, velOutputL);
+            resetPID(velPID_R, velOutputR);
             Serial.print(F("Turn done, heading to WP")); Serial.println(currentWP);
             break;
         }
 
         // Differential drive: wheels spin in opposite directions to rotate
-        double headingCorrection = headingPID.compute(0.0, -headingError);
+        hdgSetpoint = 0.0;
+        hdgInput    = -headingError;
+        headingPID.Compute();
+        double headingCorrection = hdgOutput;
 
         double targetVelL = -headingCorrection;
         double targetVelR =  headingCorrection;
@@ -666,10 +637,15 @@ void loop() {
         targetVelL = constrain(targetVelL, -TURN_SPEED_MM_S, TURN_SPEED_MM_S);
         targetVelR = constrain(targetVelR, -TURN_SPEED_MM_S, TURN_SPEED_MM_S);
 
-        double cmdL = velPID_L.compute(targetVelL, wheelVelL);
-        double cmdR = velPID_R.compute(targetVelR, wheelVelR);
+        velSetpointL = targetVelL;
+        velInputL    = wheelVelL;
+        velPID_L.Compute();
 
-        setServoOutput(cmdL, cmdR);
+        velSetpointR = targetVelR;
+        velInputR    = wheelVelR;
+        velPID_R.Compute();
+
+        setServoOutput(velOutputL, velOutputR);
         break;
     }
 
@@ -713,15 +689,24 @@ void loop() {
         double targetHeading = headingTo(measX, measY,
                                          wpX[NUM_WAYPOINTS - 1], wpY[NUM_WAYPOINTS - 1]);
         double headingError  = wrapAngle(targetHeading - odomHeading);
-        double headingCorrection = headingPID.compute(0.0, -headingError);
+
+        hdgSetpoint = 0.0;
+        hdgInput    = -headingError;
+        headingPID.Compute();
+        double headingCorrection = hdgOutput;
 
         double targetVelL = finalSpeed - headingCorrection;
         double targetVelR = finalSpeed + headingCorrection;
 
-        double cmdL = velPID_L.compute(targetVelL, wheelVelL);
-        double cmdR = velPID_R.compute(targetVelR, wheelVelR);
+        velSetpointL = targetVelL;
+        velInputL    = wheelVelL;
+        velPID_L.Compute();
 
-        setServoOutput(cmdL, cmdR);
+        velSetpointR = targetVelR;
+        velInputR    = wheelVelR;
+        velPID_R.Compute();
+
+        setServoOutput(velOutputL, velOutputR);
         break;
     }
 
