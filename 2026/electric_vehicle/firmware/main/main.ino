@@ -482,6 +482,7 @@ void setup() {
 
     // Initialise goBILDA Pinpoint Odometry Computer (I2C is started internally)
     pinpoint.begin();
+    pinpoint.setOffsets(0.0, 125.7);
     pinpoint.setEncoderResolution(goBILDA::EncoderResolution::goBILDA_4_BAR_POD);
     pinpoint.setEncoderDirections(goBILDA::EncoderDirection::Forward,
                                   goBILDA::EncoderDirection::Forward);
