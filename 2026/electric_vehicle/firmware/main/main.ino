@@ -499,9 +499,12 @@ void setup() {
     stopMotors();
 
     // Configure PID controllers (PID_v1 library)
+    // Sample time set to 10 ms: fast enough for responsive heading and velocity
+    // corrections while remaining well above the 5 ms minimum velocity-measurement
+    // update interval in updateWheelVelocities().
     headingPID.SetMode(AUTOMATIC);
     headingPID.SetOutputLimits(-200.0, 200.0);
-    headingPID.SetSampleTime(10);   // 10 ms sample period
+    headingPID.SetSampleTime(10);
 
     velPID_L.SetMode(AUTOMATIC);
     velPID_L.SetOutputLimits(-500.0, 500.0);
