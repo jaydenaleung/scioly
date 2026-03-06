@@ -334,9 +334,14 @@ const double HDG_KI =   5.0;
 const double HDG_KD =  10.0;
 
 // Velocity PID tuning: input = mm/s error, output = servo microseconds offset
-const double VEL_KP = 0.8;
-const double VEL_KI = 2.0;
-const double VEL_KD = 0.01;
+// Split per wheel so each side can be tuned independently.
+const double VEL_KP_L = 0.8;
+const double VEL_KI_L = 2.0;
+const double VEL_KD_L = 0.01;
+
+const double VEL_KP_R = 0.8;
+const double VEL_KI_R = 2.0;
+const double VEL_KD_R = 0.01;
 
 // PID I/O variables — the PID_v1 library reads/writes these via pointers
 double hdgInput = 0.0, hdgOutput = 0.0, hdgSetpoint = 0.0;
@@ -345,8 +350,8 @@ double velInputR = 0.0, velOutputR = 0.0, velSetpointR = 0.0;
 
 // Construct PID objects (DIRECT = positive output for positive error)
 PID headingPID(&hdgInput, &hdgOutput, &hdgSetpoint, HDG_KP, HDG_KI, HDG_KD, DIRECT);
-PID velPID_L(&velInputL, &velOutputL, &velSetpointL, VEL_KP, VEL_KI, VEL_KD, DIRECT);
-PID velPID_R(&velInputR, &velOutputR, &velSetpointR, VEL_KP, VEL_KI, VEL_KD, DIRECT);
+PID velPID_L(&velInputL, &velOutputL, &velSetpointL, VEL_KP_L, VEL_KI_L, VEL_KD_L, DIRECT);
+PID velPID_R(&velInputR, &velOutputR, &velSetpointR, VEL_KP_R, VEL_KI_R, VEL_KD_R, DIRECT);
 
 /*
  * resetPID() — helper to reset a PID controller's internal state.
