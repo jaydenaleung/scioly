@@ -180,6 +180,7 @@ double odomHeading = 0.0;   // radians
 
 // Read latest pose from the goBILDA Pinpoint Odometry Computer
 void updateOdometry() {
+    pinpoint.update();  // CRITICAL: must call update() before getPosition()
     goBILDA::Pose2D pos = pinpoint.getPosition();
     odomX       = (double)pos.x;          // mm
     odomY       = (double)pos.y;          // mm
@@ -329,19 +330,19 @@ void computeTrack() {
  * ───────────────────────────────────────────────────────────────────────────── */
 
 // Heading PID tuning: input = rad, output = mm/s differential correction
-const double HDG_KP = 150.0;
-const double HDG_KI =   5.0;
-const double HDG_KD =  10.0;
+const double HDG_KP = 50.0;
+const double HDG_KI = 0.0;
+const double HDG_KD = 5.0;
 
 // Velocity PID tuning: input = mm/s error, output = servo microseconds offset
 // Split per wheel so each side can be tuned independently.
-const double VEL_KP_L = 0.8;
-const double VEL_KI_L = 2.0;
-const double VEL_KD_L = 0.01;
+const double VEL_KP_L = 100.0;
+const double VEL_KI_L = 0.0;
+const double VEL_KD_L = 0.0;
 
-const double VEL_KP_R = 0.8;
-const double VEL_KI_R = 2.0;
-const double VEL_KD_R = 0.01;
+const double VEL_KP_R = 100.0;
+const double VEL_KI_R = 0.0;
+const double VEL_KD_R = 0.0;
 
 // PID I/O variables — the PID_v1 library reads/writes these via pointers
 double hdgInput = 0.0, hdgOutput = 0.0, hdgSetpoint = 0.0;
@@ -419,8 +420,8 @@ void updateWheelVelocities() {
 void setServoOutput(double pidOutL, double pidOutR) {
     // Positive PID output = forward wheel motion
     // Left: invert for gear reversal; Right: mirrored + gear reversal
-    int usL = 1500 - (int)pidOutL;
-    int usR = 1500 + (int)pidOutR;
+    int usL = 1500 + (int)pidOutL; // actually, flip back, for some reason it's driving backwards
+    int usR = 1500 - (int)pidOutR;
 
     // Clamp to valid servo pulse range
     usL = constrain(usL, 1000, 2000);
@@ -454,6 +455,16 @@ const double WP_ARRIVE_THRESH = 25.0;   // Waypoint arrival threshold (mm)
 const double TURN_THRESH       = 0.03;  // Turn completion threshold (~1.7 deg)
 
 unsigned long startTimeMs = 0;           // millis() at run start
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  DEBUG / DIAGNOSTICS
+ * ───────────────────────────────────────────────────────────────────────────── */
+unsigned long lastPrintTime = 0;
+const unsigned long PRINT_INTERVAL_MS = 100;  // Print diagnostics every 100 ms
+
+// Component connection status flags
+bool pinpointConnected = false;
+bool encodersWorking = false;
 
 /* ─────────────────────────────────────────────────────────────────────────────
  *  HELPERS
@@ -492,17 +503,35 @@ void setup() {
     pinpoint.setEncoderDirections(goBILDA::EncoderDirection::Forward,
                                   goBILDA::EncoderDirection::Forward);
     pinpoint.resetPositionAndIMU();
+    
+    // Check Pinpoint connection
+    delay(100);  // Allow time for initialization
+    goBILDA::Pose2D testPos = pinpoint.getPosition();
+    // If we can read position values, assume connected
+    pinpointConnected = true;
+    Serial.print(F("Pinpoint Odometry: "));
+    Serial.println(pinpointConnected ? F("CONNECTED") : F("NOT DETECTED"));
 
     // Encoder library handles pin modes and interrupts internally — no manual
     // pinMode() or attachInterrupt() calls are needed for encoder pins.
+    
+    // Check encoder connections by reading initial values
+    long encL_test = encL.read();
+    long encR_test = encR.read();
+    encodersWorking = true;  // Assume working if library initialized
+    Serial.print(F("Encoders (L/R initial): "));
+    Serial.print(encL_test); Serial.print(F(" / ")); Serial.println(encR_test);
 
     // Start button
     pinMode(PIN_BUTTON, INPUT_PULLUP);
+    Serial.print(F("Start Button: "));
+    Serial.println(digitalRead(PIN_BUTTON) == HIGH ? F("READY (not pressed)") : F("PRESSED"));
 
     // Servos
     servoL.attach(PIN_SERVO_L);
     servoR.attach(PIN_SERVO_R);
     stopMotors();
+    Serial.println(F("Servos: ATTACHED (L=Pin9, R=Pin10)"));
 
     // Configure PID controllers (PID_v1 library)
     // Sample time set to 10 ms: fast enough for responsive heading and velocity
@@ -736,4 +765,71 @@ void loop() {
     }
 
     } // end switch
+
+    /* ── Periodic debug output ── */
+    if (navState != NAV_IDLE && (millis() - lastPrintTime) >= PRINT_INTERVAL_MS) {
+        lastPrintTime = millis();
+
+        double elapsedS = (double)(millis() - startTimeMs) / 1000.0;
+
+        // Check component health during runtime
+        // Encoders: check if values are changing (indicates connection)
+        static long lastEncL_check = 0;
+        static long lastEncR_check = 0;
+        long currentEncL = encL.read();
+        long currentEncR = encR.read();
+        bool encL_active = (currentEncL != lastEncL_check);
+        bool encR_active = (currentEncR != lastEncR_check);
+        lastEncL_check = currentEncL;
+        lastEncR_check = currentEncR;
+
+        // Print current navigation state and waypoint
+        Serial.print(F("[")); Serial.print(elapsedS, 2); Serial.print(F("s] State: "));
+        switch (navState) {
+            case NAV_STRAIGHT:       Serial.print(F("STRAIGHT")); break;
+            case NAV_TURNING:        Serial.print(F("TURNING")); break;
+            case NAV_FINAL_APPROACH: Serial.print(F("FINAL")); break;
+            case NAV_DONE:           Serial.print(F("DONE")); break;
+            default:                 Serial.print(F("?"));
+        }
+        Serial.print(F(" WP")); Serial.println(currentWP);
+
+        // Component status
+        Serial.print(F("  Components: Pinpoint="));
+        Serial.print(pinpointConnected ? F("OK") : F("FAIL"));
+        Serial.print(F(", EncL="));
+        Serial.print(encL_active ? F("OK") : F("IDLE"));
+        Serial.print(F(", EncR="));
+        Serial.println(encR_active ? F("OK") : F("IDLE"));
+
+        // Wheel velocities (mm/s)
+        Serial.print(F("  Vel: L=")); Serial.print(wheelVelL, 1);
+        Serial.print(F(" mm/s, R=")); Serial.print(wheelVelR, 1);
+        Serial.println(F(" mm/s"));
+
+        // Measurement point position (mm)
+        Serial.print(F("  Pos: (")); Serial.print(measX, 1);
+        Serial.print(F(", ")); Serial.print(measY, 1);
+        Serial.println(F(") mm"));
+
+        // Heading PID error (radians, converted to degrees for readability)
+        Serial.print(F("  HdgErr: ")); Serial.print(degrees(hdgInput), 2);
+        Serial.println(F("°"));
+
+        // Velocity PID errors (mm/s)
+        double velErrL = velSetpointL - wheelVelL;
+        double velErrR = velSetpointR - wheelVelR;
+        Serial.print(F("  VelErr: L=")); Serial.print(velErrL, 1);
+        Serial.print(F(" mm/s, R=")); Serial.print(velErrR, 1);
+        Serial.println(F(" mm/s"));
+
+        // Servo pulse outputs and raw encoder counts (for debugging)
+        Serial.print(F("  Servo: L="));
+        int debugUsL = 1500 + (int)velOutputL;
+        int debugUsR = 1500 - (int)velOutputR;
+        Serial.print(debugUsL); Serial.print(F(" us, R=")); Serial.print(debugUsR);
+        Serial.println(F(" us"));
+        Serial.print(F("  EncCounts: L=")); Serial.print(encL.read());
+        Serial.print(F(", R=")); Serial.println(encR.read());
+    }
 }
