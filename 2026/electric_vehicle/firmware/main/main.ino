@@ -12,12 +12,12 @@ const double diameter = 9.0; // average diameter of BACK wheels in cm
 const double circumference = PI*diameter;
 
 ////// COMP PARAMS //////
-const double TARGET_DIST = 810.0; // in cm
+const double TARGET_DIST = 870.0; // in cm
 const double TARGET_REVS = TARGET_DIST / circumference;
 const int TARGET_REVS_FLOOR = (int)TARGET_REVS;
 const int TARGET_CLICKS = TARGET_REVS_FLOOR * 4;
 
-const double TARGET_TIME = 15.0; // in s
+const double TARGET_TIME = 12.5; // in s
 const double TARGET_TIME_MS = TARGET_TIME*1000.0; // in ms
 
 // Speed logic
@@ -85,6 +85,7 @@ void loop() {
     // Start button
     currentButtonState = digitalRead(buttonPin);
     if (!start && currentButtonState == LOW && lastButtonState == HIGH) { // LOW = pressed, HIGH = not pressed
+        Serial.println("button started");
         start = true;
         startTiming = true;
     }
