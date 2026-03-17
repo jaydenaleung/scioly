@@ -3,6 +3,12 @@
 
 This is my partner's and my electric vehicle for the Science Olympiad at Harvard SciOly and States SciOly. The Harvard version is a Front Wheel Drive, straight-line robot using a goBILDA Super Speed Servo to drive it. The attempted States version uses two wheels driven by two Super Speed Servos in addition to motor encoders for the velocity PID and the goBILDA Odometry setup for the position PID.
 
+<img width="1000" alt="Screenshot 2026-03-16 at 7 50 26 PM" src="https://github.com/user-attachments/assets/8dda9f9e-e055-4df4-bf84-c6ec9bfdba67" />
+
+<img width="500" alt="Screenshot 2026-03-16 at 7 50 26 PM" src="https://github.com/user-attachments/assets/46336b55-ba42-4341-96a5-f24b2874f809" />
+
+<img width="500" alt="Screenshot 2026-03-16 at 7 50 26 PM" src="https://github.com/user-attachments/assets/37545d13-2225-471d-9f67-df9afe8dad28" />
+
 ---
 
 ## How to Use
