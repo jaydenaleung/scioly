@@ -1,9 +1,7 @@
 # 2026 Science Olympiad Electric Vehicle
-### 10th Place at State Competition
+## 10th Place at State Competition
 
-This is my and my partner's electric vehicle for Science Olympiad at Harvard SciOly and States SciOly. The Harvard version is a front wheel drive straight-line robot using a goBILDA Super Speed Servo to drive it. The attempted States version uses two wheels driven by two Super Speed Servos in addition to motor encoders for the velocity PID and the goBILDA Odometry setup for the position PID.
-
--- rendered picture --
+This is my partner's and my electric vehicle for the Science Olympiad at Harvard SciOly and States SciOly. The Harvard version is a Front Wheel Drive, straight-line robot using a goBILDA Super Speed Servo to drive it. The attempted States version uses two wheels driven by two Super Speed Servos in addition to motor encoders for the velocity PID and the goBILDA Odometry setup for the position PID.
 
 ---
 
@@ -17,21 +15,35 @@ States version: This version is unfinished and untested, but ideally, you'd use 
 
 Since I was a kid, I've always loved engineering, coding, and building things with my hands. As I've got more into building electronics, I wanted to try my hand at this build event for this year's Science Olympiad season. This robot is for my third SciOly season, and I wanted to spend time to build something custom and good this year.
 
--- irl pictures of both robots --
+Harvard:
+
+<img width="500" alt="Screenshot 2026-03-16 at 7 50 26 PM" src="https://github.com/user-attachments/assets/97eba9dd-decc-4143-b366-3677a4441586" />
+
+States:
+
+<img height="500" alt="Screenshot 2026-03-16 at 7 50 26 PM" src="https://github.com/user-attachments/assets/96494057-8905-4624-b505-28b8a22e17ff" />
 
 ## 3D CAD Model
 
 I used Onshape to design this electric vehicle. You can find the Onshape design at this [link](https://cad.onshape.com/documents/1f13c2afbaef7ea2c9c90426/w/eae7389462c6562ac928b722/e/d476c01702c9b15c2478fb6e), with a versioned history of Harvard and States iterations. All my CAD files are in the 'cad' folder.
 
--- picture model of harvard AND states --
+Harvard:
+
+<img width="500" alt="Screenshot 2026-03-16 at 7 52 25 PM" src="https://github.com/user-attachments/assets/5e877def-e95b-47a9-b960-823b912f2ae8" />
+
+States:
+
+<img width="500" alt="Screenshot 2026-03-16 at 7 50 26 PM" src="https://github.com/user-attachments/assets/ae73e742-7c04-40d2-9c6a-784300e947bf" />
 
 ## Wiring
 
 This robot does not use a PCB and uses jumper wires + a breadboard for its wiring. The wiring schematic is below:
 
--- harvard --
+Harvard:
 
--- states --
+<img width="700" alt="Screenshot 2026-03-16 at 7 53 42 PM" src="https://github.com/user-attachments/assets/59bdebac-6d94-4164-9438-47f8864ada25" />
+
+<img width="700" alt="Screenshot 2026-03-16 at 8 07 13 PM" src="https://github.com/user-attachments/assets/45c15060-ff83-48b6-a44b-9207359d81f5" />
 
 ## Programming
 
