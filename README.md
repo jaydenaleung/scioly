@@ -53,7 +53,7 @@ Harvard:
 
 ## Programming
 
-This robot should be programmed through the Arduino IDE as it uses an Arduino Uno. Please install the library in the 'firmware/libraries' folder into the Arduino IDE (instructions can be found online). **Do not install the goBILDA Pinpoint library typically found in the Arduino library search, as that is not compatible with the Arduino Uno. Use the included library in the firmware/libraries folder instead.** Note: The Harvard robot's code works fine, but the attempted States code does not work yet. You will need to re-tune the PID and/or re-code it... it failed for me.
+This robot should be programmed through the Arduino IDE as it uses an Arduino Uno. Please install the library in the 'firmware/libraries' folder into the Arduino IDE (instructions can be found online). **Do not install the goBILDA Pinpoint library typically found in the Arduino library search, as that is not compatible with the Arduino Uno. Use the included library in the firmware/libraries folder instead.**
 
 ## Bill of Materials (BOM) for V1 (Harvard)
 
